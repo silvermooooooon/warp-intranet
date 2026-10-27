@@ -104,6 +104,9 @@ lazy_static! {
 }
 
 pub fn fallback_font_fn(ch: char) -> Option<ExternalFontFamily> {
+    if !network_policy::is_network_enabled() {
+        return None;
+    }
     match ch {
         '\u{007F}'..='\u{007F}'
         | '\u{21E7}'..='\u{21E7}'

@@ -25,6 +25,9 @@ unsafe extern "C" {
 }
 
 pub fn init_cocoa_sentry() {
+    if !network_policy::is_network_enabled() {
+        return;
+    }
     let endpoint = ChannelState::sentry_url();
     let environment = super::get_environment();
 

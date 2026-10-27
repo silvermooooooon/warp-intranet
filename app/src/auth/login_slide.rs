@@ -508,6 +508,10 @@ impl LoginSlideView {
     /// Starts the browser sign-up flow. Shared by the Continue button and the
     /// skip dialog's cancel button.
     fn start_login(&mut self, ctx: &mut ViewContext<Self>) {
+        if !network_policy::is_network_enabled() {
+            return;
+        }
+
         self.send_account_first_action("create_account", "continue_signup", ctx);
         send_telemetry_from_ctx!(
             TelemetryEvent::LoginButtonClicked {

@@ -182,6 +182,10 @@ impl Client {
     }
 
     pub fn from_client_builder(client_builder: reqwest::ClientBuilder) -> reqwest::Result<Self> {
+        #[cfg(not(target_family = "wasm"))]
+        let client_builder = client_builder
+            .no_proxy()
+            .redirect(reqwest::redirect::Policy::none());
         client_builder.build().map(|client| Self {
             wrapped: client,
             include_warp_headers: true,
@@ -269,6 +273,9 @@ impl Client {
     /// Returns the IAP bearer token to attach to a request targeting
     /// `url`, scoped to the Warp server's origin.
     fn iap_token_for<U: IntoUrl>(&self, url: U) -> Option<String> {
+        if !network_policy::is_network_enabled() {
+            return None;
+        }
         let provider = self.iap_token_provider.as_ref()?;
         let url = url.into_url().ok()?;
         if !is_warp_server_origin(&url) {
@@ -385,12 +392,24 @@ impl Client {
         builder
     }
 
+    // reqwest does not expose an error constructor. A relative URL produces a builder error
+    // locally, without handing the original URL or credentials to a transport.
+    fn network_disabled_error(&self) -> reqwest::Error {
+        self.wrapped
+            .get("application-networking-disabled-in-warp-intranet")
+            .build()
+            .expect_err("a relative URL must fail before network I/O")
+    }
+
     pub async fn execute(&self, request: Request) -> reqwest::Result<Response> {
         self.execute_inner(request).await
     }
 
     /// Core request execution logic shared by all platforms.
     async fn execute_inner(&self, request: Request) -> reqwest::Result<Response> {
+        if !network_policy::is_network_enabled() {
+            return Err(self.network_disabled_error());
+        }
         let Request {
             wrapped: request,
             serialized_payload,
@@ -520,6 +539,11 @@ impl<'a> RequestBuilder<'a> {
     /// Sends the request to the endpoint, which is assumed to be a streaming server-sent-events
     /// endpoint, and returns a corresponding `EventSource`.
     pub fn eventsource(self) -> EventSourceStream {
+        if !network_policy::is_network_enabled() {
+            return Box::pin(futures::stream::once(future::ready(Err(
+                reqwest_eventsource::Error::Transport(self.client.network_disabled_error()),
+            ))));
+        }
         cfg_if::cfg_if! {
             if #[cfg(target_family = "wasm")] {
                 let mut stream = self
@@ -867,3 +891,7 @@ mod origin_tests {
 #[cfg(all(test, not(target_family = "wasm")))]
 #[path = "lib_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "intranet_tests.rs"]
+mod intranet_tests;

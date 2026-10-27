@@ -19,6 +19,8 @@ pub struct LoopbackOAuthReceiver {
 
 impl LoopbackOAuthReceiver {
     pub async fn bind() -> Result<Self, AuthError> {
+        network_policy::require_network()
+            .map_err(|err| AuthError::AuthorizationFailed(err.to_string()))?;
         let listener = TcpListener::bind(("127.0.0.1", 0))
             .await
             .map_err(|err| AuthError::InternalError(err.to_string()))?;

@@ -6,6 +6,7 @@ publish.workspace = true
 license.workspace = true
 
 [dependencies]
+network_policy.workspace = true
 anyhow.workspace = true
 axum.workspace = true
 log.workspace = true

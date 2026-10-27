@@ -21,6 +21,8 @@ pub(super) fn ensure_protocol_version(protocol_version: u32) -> Result<(), Contr
 }
 
 pub(super) fn ensure_feature_enabled() -> Result<(), ControlError> {
+    network_policy::require_network()
+        .map_err(|err| ControlError::new(ErrorCode::LocalControlDisabled, err.to_string()))?;
     if warp_control_cli_enabled() {
         return Ok(());
     }

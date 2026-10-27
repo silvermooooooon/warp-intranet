@@ -11,4 +11,5 @@ integration_tests = []
 test-util = []
 
 [dependencies]
+network_policy.workspace = true
 enum-iterator.workspace = true

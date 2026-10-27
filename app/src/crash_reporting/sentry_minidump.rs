@@ -118,6 +118,7 @@ pub struct MinidumpGuard {
 
 /// Run the minidump server process.
 pub fn run_server(socket_path: &Path) -> anyhow::Result<()> {
+    network_policy::require_network()?;
     // For troubleshooting, attempt to log from the minidump server. There's not much we can really
     // do if crash reporting fails, so creating the log file itself is best-effort.
     let log_dir = warp_core::paths::state_dir().join(warp_core::paths::WARP_LOGS_DIR);

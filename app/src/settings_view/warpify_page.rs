@@ -447,6 +447,9 @@ impl TypedActionView for WarpifyPageView {
                 });
             }
             OpenUrl(url) => {
+                if !network_policy::is_network_enabled() {
+                    return;
+                }
                 ctx.open_url(url.as_str());
             }
         }
@@ -493,10 +496,14 @@ impl TitleWidget {
                 "Configure whether Warp attempts to “Warpify” (add support for blocks, \
                     input modes, etc) certain shells. ",
             ),
-            FormattedTextFragment::hyperlink(
-                "Learn more",
-                "https://docs.warp.dev/terminal/warpify/subshells",
-            ),
+            if network_policy::is_network_enabled() {
+                FormattedTextFragment::hyperlink(
+                    "Learn more",
+                    "https://docs.warp.dev/terminal/warpify/subshells",
+                )
+            } else {
+                FormattedTextFragment::plain_text("")
+            },
         ];
 
         let warpify_description = FormattedTextElement::new(
@@ -509,7 +516,9 @@ impl TitleWidget {
         )
         .with_hyperlink_font_color(appearance.theme().accent().into_solid())
         .register_default_click_handlers(|url, _, ctx| {
-            ctx.open_url(&url.url);
+            if network_policy::is_network_enabled() {
+                ctx.open_url(&url.url);
+            }
         })
         .finish();
 

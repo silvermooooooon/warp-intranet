@@ -43,6 +43,8 @@ pub fn send_request(
     instance: &InstanceRecord,
     request: &RequestEnvelope,
 ) -> Result<ResponseEnvelope, ControlError> {
+    network_policy::require_network()
+        .map_err(|err| ControlError::new(ErrorCode::LocalControlDisabled, err.to_string()))?;
     instance.validate_local_control_authority()?;
     let credential = request_credential(instance, request.action.kind)?;
     let endpoint = instance.endpoint.as_ref().ok_or_else(|| {
@@ -94,6 +96,8 @@ pub fn send_request(
     instance: &InstanceRecord,
     request: &RequestEnvelope,
 ) -> Result<ResponseEnvelope, ControlError> {
+    network_policy::require_network()
+        .map_err(|err| ControlError::new(ErrorCode::LocalControlDisabled, err.to_string()))?;
     request_credential(instance, request.action.kind)?;
     Err(ControlError::new(
         ErrorCode::LocalControlDisabled,

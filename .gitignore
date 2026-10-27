@@ -70,3 +70,9 @@ __pycache__/
 # Project notes
 .note/
 .claude/scheduled_tasks.lock
+
+# Intranet build outputs and dependency transfer inputs
+/dist/
+/vendor/
+/.cargo/intranet-vendor.toml
+/intranet-third-party-licenses.txt

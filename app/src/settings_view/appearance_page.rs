@@ -669,6 +669,9 @@ impl TypedActionView for AppearanceSettingsPageView {
             OpacitySliderDragged(val) => self.set_opacity(*val, false, ctx),
             BlurSliderDragged(val) => self.set_blur(*val, false, ctx),
             OpenUrl(url) => {
+                if !network_policy::is_network_enabled() {
+                    return;
+                }
                 ctx.open_url(url);
             }
             ToggleTabIndicators => self.toggle_tab_indicators(ctx),
@@ -2831,7 +2834,9 @@ impl SettingsWidget for CreateCustomThemeWidget {
                 .ui_builder()
                 .link(
                     "Create your own custom theme".to_string(),
-                    Some("https://docs.warp.dev/terminal/appearance/custom-themes".to_string()),
+                    network_policy::is_network_enabled().then(|| {
+                        "https://docs.warp.dev/terminal/appearance/custom-themes".to_string()
+                    }),
                     None,
                     self.mouse_state.clone(),
                 )

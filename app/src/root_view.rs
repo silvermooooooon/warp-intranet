@@ -656,6 +656,9 @@ fn refresh_pending_onboarding_choices(
 }
 
 fn send_feedback(_: &(), ctx: &mut AppContext) {
+    if !network_policy::is_network_enabled() {
+        return;
+    }
     match active_workspace(ctx) {
         Some(workspace) => {
             workspace.update(ctx, |workspace, ctx| {
@@ -1926,7 +1929,9 @@ impl RootView {
             workspace_setting,
         };
 
-        let auth_onboarding_state = if auth_state.is_logged_in() {
+        let auth_onboarding_state = if !network_policy::is_network_enabled()
+            || auth_state.is_logged_in()
+        {
             AuthOnboardingState::Terminal(workspace_args.create_workspace(ctx))
         } else {
             cfg_if! {

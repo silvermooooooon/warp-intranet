@@ -169,6 +169,7 @@ impl BridgeStream {
                 "The ACP driver listens on a Unix socket, which this platform cannot connect to"
             )),
             BridgeEndpoint::Tcp(address) => {
+                network_policy::require_network()?;
                 let stream = TcpStream::connect(address).with_context(|| {
                     format!("Failed to connect to the ACP driver at {endpoint}")
                 })?;
@@ -562,6 +563,7 @@ impl Listener {
         if let Some(bound) = Self::bind_unix_in(dir)? {
             return Ok(bound);
         }
+        network_policy::require_network()?;
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
             .context("Failed to bind a loopback port for the ACP bridge")?;
         let address = listener.local_addr()?;

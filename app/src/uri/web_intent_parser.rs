@@ -22,6 +22,7 @@ pub enum WebIntent {
 
 impl WebIntent {
     pub fn try_from_url(url: &Url) -> Result<Self> {
+        network_policy::require_network()?;
         // Only handle URLs that point at the current channel's web server.
         let server_root = ChannelState::server_root_url();
         let server_root_url = Url::parse(&server_root)?;

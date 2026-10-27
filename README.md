@@ -1,3 +1,5 @@
+> **Warp Intranet (Apple Silicon)**: 本分支为内网终端改版候选。构建状态、禁用范围与验收限制见 [INTRANET.md](INTRANET.md)。下方保留上游说明，不代表本分支仍提供云服务。
+
 <a href="https://www.warp.dev">
     <img width="1024" alt="Warp Agentic Development Environment product preview" src="https://github.com/user-attachments/assets/9976b2da-2edd-4604-a36c-8fd53719c6d4" />
 </a>

@@ -80,6 +80,9 @@ pub fn record_event(
     contains_ugc: bool,
     timestamp: DateTime<Utc>,
 ) {
+    if !network_policy::is_network_enabled() {
+        return;
+    }
     let mut telemetry = TELEMETRY.lock();
     telemetry.record_event(
         user_id,
@@ -92,6 +95,9 @@ pub fn record_event(
 }
 
 pub fn record_identify_user_event(user_id: String, anonymous_id: String, timestamp: DateTime<Utc>) {
+    if !network_policy::is_network_enabled() {
+        return;
+    }
     let mut telemetry = TELEMETRY.lock();
     telemetry.record_identify_user_event(user_id, anonymous_id, timestamp);
 }
@@ -103,6 +109,9 @@ pub fn record_app_active_event(
     anonymous_id: String,
     timestamp: DateTime<Utc>,
 ) {
+    if !network_policy::is_network_enabled() {
+        return;
+    }
     let mut telemetry = TELEMETRY.lock();
     telemetry.record_app_active(user_id, anonymous_id, timestamp);
 }

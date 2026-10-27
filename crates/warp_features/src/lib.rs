@@ -1,6 +1,8 @@
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 use enum_iterator::{Sequence, cardinality};
+
+mod intranet;
 #[cfg(feature = "test-util")]
 pub use overrides::{get_overrides, set_overrides};
 
@@ -1112,6 +1114,12 @@ pub const RUNTIME_FEATURE_FLAGS: &[FeatureFlag] = &[FeatureFlag::LocalClaudeCode
 
 impl FeatureFlag {
     pub fn is_enabled(&self) -> bool {
+        if !network_policy::is_network_enabled()
+            && let Some(enabled) = intranet::override_state(*self)
+        {
+            return enabled;
+        }
+
         #[cfg(all(debug_assertions, not(feature = "test-util")))]
         {
             use std::sync::atomic::Ordering;

@@ -424,7 +424,11 @@ pub fn render_cta_line<A: Action + Clone>(
     .with_no_text_wrapping()
     .with_hyperlink_font_color(theme.accent().into_solid())
     .register_default_click_handlers_with_action_support(|lens, event, ctx| match lens {
-        HyperlinkLens::Url(url) => ctx.open_url(url),
+        HyperlinkLens::Url(url) => {
+            if network_policy::is_network_enabled() {
+                ctx.open_url(url);
+            }
+        }
         HyperlinkLens::Action(dispatched) => {
             if let Some(action) = dispatched.as_any().downcast_ref::<A>() {
                 event.dispatch_typed_action(action.clone());

@@ -269,6 +269,8 @@ pub async fn make_authenticated_client(
     http_client: reqwest::Client,
     auth_context: AuthContext,
 ) -> Result<(AuthClient<reqwest::Client>, bool), AuthError> {
+    network_policy::require_network()
+        .map_err(|err| AuthError::AuthorizationFailed(err.to_string()))?;
     let AuthContext {
         callback_mode,
         uuid,

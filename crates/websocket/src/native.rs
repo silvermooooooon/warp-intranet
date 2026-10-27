@@ -30,6 +30,7 @@ static CLIENT_CONFIG: std::sync::LazyLock<Result<Arc<rustls::ClientConfig>, rust
 /// the connection is tunneled through the specified HTTP proxy using the CONNECT method.
 /// The `NO_PROXY` environment variable is respected to bypass the proxy for specific hosts.
 pub async fn connect(request: impl IntoClientRequest + Unpin) -> anyhow::Result<WebSocket> {
+    network_policy::require_network()?;
     let request = request.into_client_request()?;
     let tls_connector = Some(TlsConnector::from(CLIENT_CONFIG.clone()?));
 

@@ -407,6 +407,9 @@ impl TypedActionView for ExternalEditorView {
                 self.toggle_prefer_tabbed_editor_view(ctx);
             }
             ExternalEditorAction::OpenUrl(url) => {
+                if !network_policy::is_network_enabled() {
+                    return;
+                }
                 ctx.open_url(url.as_str());
             }
         }

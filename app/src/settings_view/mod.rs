@@ -311,9 +311,9 @@ pub enum SettingsViewEvent {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub enum SettingsSection {
     About,
-    #[default]
     Account,
     BillingAndUsage,
+    #[default]
     Appearance,
     Features,
     Keybindings,
@@ -365,6 +365,26 @@ impl Display for SettingsSection {
 }
 
 impl SettingsSection {
+    fn is_available_in_intranet(self) -> bool {
+        matches!(
+            self,
+            Self::About
+                | Self::Appearance
+                | Self::Features
+                | Self::Keybindings
+                | Self::Warpify
+                | Self::EditorAndCodeReview
+        )
+    }
+
+    fn available_or_default(self) -> Self {
+        if network_policy::is_network_enabled() || self.is_available_in_intranet() {
+            self
+        } else {
+            Self::default()
+        }
+    }
+
     /// Stable identifier for this section, used everywhere the section leaves
     /// the process: the SQLite session-restore key and the
     /// `surface.settings.open --page` warpctrl vocabulary.
@@ -1403,6 +1423,10 @@ impl SettingsView {
             SettingsPage::new(about_page_handle),
         ]);
 
+        if !network_policy::is_network_enabled() {
+            settings_pages.retain(|page| page.section.is_available_in_intranet());
+        }
+
         // Build sidebar nav items. Umbrellas group their subpages here and
         // nowhere else, so this list is the only place membership is declared.
         let mut nav_items = vec![
@@ -1457,12 +1481,27 @@ impl SettingsView {
             );
         }
 
+        if !network_policy::is_network_enabled() {
+            nav_items = [
+                SettingsSection::Appearance,
+                SettingsSection::Features,
+                SettingsSection::Keybindings,
+                SettingsSection::Warpify,
+                SettingsSection::EditorAndCodeReview,
+                SettingsSection::About,
+            ]
+            .into_iter()
+            .map(SettingsNavItem::Page)
+            .collect();
+        }
+
         let initial_page = match page {
             Some(SettingsSection::Scripting) if !FeatureFlag::WarpControlCli.is_enabled() => {
                 SettingsSection::Account
             }
             other => other.unwrap_or_default(),
-        };
+        }
+        .available_or_default();
 
         // Auto-expand the umbrella if the initial page is one of its subpages.
         for item in &mut nav_items {
@@ -2043,6 +2082,7 @@ impl SettingsView {
         allow_steal_focus: bool,
         ctx: &mut ViewContext<Self>,
     ) {
+        let section = section.available_or_default();
         // Every nav target owns its backing page. Check it exists.
         if self.settings_page(section).is_none() {
             return;
@@ -2112,6 +2152,11 @@ impl SettingsView {
     }
 
     fn should_render_page(&self, settings_page: &SettingsPage, app: &AppContext) -> bool {
+        if !network_policy::is_network_enabled()
+            && !settings_page.section.is_available_in_intranet()
+        {
+            return false;
+        }
         match &settings_page.view_handle {
             SettingsPageViewHandle::Main(v) => v.as_ref(app).should_render(app),
             SettingsPageViewHandle::Teams(v) => v.as_ref(app).should_render(app),
@@ -2910,3 +2955,6 @@ impl BackingView for SettingsView {
 #[cfg(test)]
 #[path = "mod_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod intranet_tests;

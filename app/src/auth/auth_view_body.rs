@@ -837,6 +837,9 @@ impl TypedActionView for AuthViewBody {
     type Action = AuthViewBodyAction;
 
     fn handle_action(&mut self, action: &AuthViewBodyAction, ctx: &mut ViewContext<Self>) {
+        if !network_policy::is_network_enabled() {
+            return;
+        }
         match action {
             AuthViewBodyAction::Login => {
                 send_telemetry_from_ctx!(

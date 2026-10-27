@@ -135,6 +135,9 @@ impl AutoupdateState {
     /// Must be called explicitly once onboarding (if any) has completed. For returning users
     /// who bypass onboarding, this should be called during app startup.
     pub fn start_polling(&mut self, ctx: &mut ModelContext<Self>) {
+        if !network_policy::is_network_enabled() {
+            return;
+        }
         if self.polling_started {
             return;
         }
@@ -247,6 +250,9 @@ impl AutoupdateState {
     /// The caller is responsible for checking that we _should_ check for an update. Generally, the
     /// only caller should be [`Self::try_execute_request`].
     fn check_for_update(&mut self, request_type: RequestType, ctx: &mut ModelContext<Self>) {
+        if !network_policy::is_network_enabled() {
+            return;
+        }
         let current_date = chrono::Local::now().date_naive();
         let is_daily = self.should_make_daily_request(
             request_type,
@@ -1043,6 +1049,9 @@ pub fn spawn_child_if_necessary(app: &mut AppContext) {
 }
 
 pub fn manually_download_new_version(ctx: &mut AppContext) {
+    if !network_policy::is_network_enabled() {
+        return;
+    }
     match get_update_state(ctx) {
         AutoupdateStage::UnableToUpdateToNewVersion { new_version }
         | AutoupdateStage::UnableToLaunchNewVersion { new_version } => {

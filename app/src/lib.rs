@@ -620,11 +620,14 @@ impl LaunchMode {
     /// CLI, proxy, TUI) would otherwise contend for the fixed port.
     #[cfg_attr(target_family = "wasm", allow(dead_code))]
     fn should_start_local_http_server(&self) -> bool {
-        self.is_gui()
+        network_policy::is_network_enabled() && self.is_gui()
     }
 
     /// Returns `true` if this process can build and sync codebase indices.
     fn supports_indexing(&self) -> bool {
+        if !network_policy::is_network_enabled() {
+            return false;
+        }
         match self {
             LaunchMode::CommandLine { command, .. } => {
                 // A pre-warmed sandbox indexes its repositories during preparation, so the
@@ -784,6 +787,7 @@ pub fn run() -> Result<()> {
     // Ensure feature flags are initialized before parsing command-line arguments.
     features::init_feature_flags();
     if let Some(args) = warp_cli::local_control::ControlArgs::from_control_mode_env() {
+        network_policy::require_network()?;
         #[cfg(windows)]
         warp_util::windows::attach_to_parent_console();
         warp_cli::local_control::run_and_exit(args);
@@ -828,6 +832,7 @@ pub fn run() -> Result<()> {
                 return warp_cli::completions::generate_to_stdout(*shell);
             }
             warp_cli::Command::CommandLine(cmd) => {
+                network_policy::require_network()?;
                 #[cfg(not(target_family = "wasm"))]
                 if let CliCommand::EnvironmentCheckout(args) = cmd.as_ref() {
                     let (mut tracing_initialization, parent_context) =
@@ -899,6 +904,7 @@ fn run_worker_command(worker: &warp_cli::WorkerCommand) -> Result<()> {
         }
         #[cfg(not(target_family = "wasm"))]
         warp_cli::WorkerCommand::RemoteServerProxy(args) => {
+            network_policy::require_network()?;
             // Proxy is a thin byte bridge (stdin/stdout ↔ Unix socket).
             // It only needs logging to stderr since stdout is the protocol
             // channel. No crash reporting, no initialize_app.
@@ -914,12 +920,14 @@ fn run_worker_command(worker: &warp_cli::WorkerCommand) -> Result<()> {
         }
         #[cfg(not(target_family = "wasm"))]
         warp_cli::WorkerCommand::RemoteServerDaemon(args) => {
+            network_policy::require_network()?;
             // Daemon handles its own full initialization (including
             // initialize_app and crash reporting) inside run_daemon_app.
             crate::remote_server::run_daemon(args.identity_key.clone())
         }
         #[cfg(not(target_family = "wasm"))]
         warp_cli::WorkerCommand::AcpBridge { launch_file } => {
+            network_policy::require_network()?;
             // Stdout belongs to the agent's protocol stream, so there is no logging and no
             // initialize_app.
             crate::ai::agent_sdk::driver::harness::acp::run_bridge(launch_file)
@@ -1508,7 +1516,9 @@ pub(crate) fn initialize_app(
     // Daemon auth arrives through the client handshake, so avoid platform keychains that may
     // require an interactive unlock prompt. Other headless modes still use secure storage for
     // persisted login and BYO provider credentials.
-    if matches!(launch_mode, LaunchMode::RemoteServerDaemon { .. }) {
+    if !network_policy::is_network_enabled()
+        || matches!(launch_mode, LaunchMode::RemoteServerDaemon { .. })
+    {
         warpui_extras::secure_storage::register_unavailable(ctx);
     } else {
         // Register an implementation of the secure storage service.
@@ -1544,12 +1554,19 @@ pub(crate) fn initialize_app(
         ctx.set_zoom_factor(WindowSettings::as_ref(ctx).zoom_level.as_zoom_factor());
     }
 
-    let (auth_state, pending_api_key) = match launch_mode.auth_initialization() {
-        AuthInitialization::Persisted => (AuthState::initialize(ctx), None),
-        AuthInitialization::PendingApiKey(api_key) => (
-            AuthState::initialize_for_credential_validation(ctx),
-            Some(api_key),
-        ),
+    let (auth_state, pending_api_key) = if network_policy::is_network_enabled() {
+        match launch_mode.auth_initialization() {
+            AuthInitialization::Persisted => (AuthState::initialize(ctx), None),
+            AuthInitialization::PendingApiKey(api_key) => (
+                AuthState::initialize_for_credential_validation(ctx),
+                Some(api_key),
+            ),
+        }
+    } else {
+        let auth_state = AuthState::initialize_for_credential_validation(ctx);
+        auth_state.set_user(None);
+        auth_state.set_credentials(None);
+        (auth_state, None)
     };
     let auth_state = Arc::new(auth_state);
     timer.mark_interval_end("AUTH_MANAGER_SET_USER");
@@ -1565,7 +1582,10 @@ pub(crate) fn initialize_app(
     // is handed to both `ServerApi` (for sync reads on the request path) and
     // `IapManager` (which owns refresh logic on the main thread).
     #[cfg(not(target_family = "wasm"))]
-    let iap_state = ChannelState::iap_config().map(|cfg| Arc::new(IapState::new(&cfg)));
+    let iap_state = network_policy::is_network_enabled()
+        .then(ChannelState::iap_config)
+        .flatten()
+        .map(|cfg| Arc::new(IapState::new(&cfg)));
     #[cfg(target_family = "wasm")]
     let iap_state: Option<Arc<IapState>> = None;
 
@@ -1778,7 +1798,16 @@ pub(crate) fn initialize_app(
     // Initialize a global model to track server-side experiment state.
     // This depends on the [`GlobalResourceHandlesProvider`] and so it must
     // be initialized after it.
-    ctx.add_singleton_model(|ctx| ServerExperiments::new_from_cache(experiments, ctx));
+    ctx.add_singleton_model(|ctx| {
+        ServerExperiments::new_from_cache(
+            if network_policy::is_network_enabled() {
+                experiments
+            } else {
+                Vec::new()
+            },
+            ctx,
+        )
+    });
 
     ctx.add_singleton_model(|ctx| AIRequestUsageModel::new(ai_client, ctx));
 
@@ -1797,11 +1826,13 @@ pub(crate) fn initialize_app(
         #[cfg_attr(target_family = "wasm", allow(unused_mut))]
         let mut manager = ::ai::api_keys::ApiKeyManager::new(ctx);
         #[cfg(not(target_family = "wasm"))]
-        if matches!(launch_mode, LaunchMode::Tui { .. }) {
+        if network_policy::is_network_enabled() && matches!(launch_mode, LaunchMode::Tui { .. }) {
             manager.subscribe_to_tui_api_key_changes(ctx);
         }
         #[cfg(not(target_family = "wasm"))]
-        manager.subscribe_to_settings_changes(ctx);
+        if network_policy::is_network_enabled() {
+            manager.subscribe_to_settings_changes(ctx);
+        }
         // Gemini Enterprise (GEAP) credential refresh triggers: workspace
         // settings saves / team changes and the member's enablement toggle.
         #[cfg(not(target_family = "wasm"))]
@@ -2031,10 +2062,12 @@ pub(crate) fn initialize_app(
         // If the app was opened while logged out, record an event for measuring new users.
         // This is sent immediately in case they quit the app on the signup screen.
         send_telemetry_sync_from_app_ctx!(TelemetryEvent::LoggedOutStartup, ctx);
-        download_method::determine_and_report(
-            auth_state.clone(),
-            ctx.background_executor().clone(),
-        );
+        if network_policy::is_network_enabled() {
+            download_method::determine_and_report(
+                auth_state.clone(),
+                ctx.background_executor().clone(),
+            );
+        }
     }
 
     #[cfg(not(target_family = "wasm"))]
@@ -2135,7 +2168,9 @@ pub(crate) fn initialize_app(
     timer.mark_interval_end("INITIALIZE_TELEMETRY_COLLECTION");
 
     // Register initial keybindings prior to creating menus
-    ai::init(ctx);
+    if network_policy::is_network_enabled() {
+        ai::init(ctx);
+    }
     app_services::init(ctx);
     // // TODO: Temporarily disabling keybindings for WASM builds. Will be implemented in future WASM support.
     #[cfg(not(target_family = "wasm"))]
@@ -2145,7 +2180,9 @@ pub(crate) fn initialize_app(
     terminal::init(ctx);
     input::init(ctx);
     editor::init(ctx);
-    onboarding::init(ctx);
+    if network_policy::is_network_enabled() {
+        onboarding::init(ctx);
+    }
     menu::init(ctx);
     tips::tip_view::init(ctx);
     launch_configs::init(ctx);
@@ -2189,7 +2226,9 @@ pub(crate) fn initialize_app(
     ctx.add_singleton_model(|_| GitHubAuthNotifier::new());
     ctx.add_singleton_model(|_| NetworkStatus::new());
     ctx.add_singleton_model(|_| SystemStats::new());
-    workspace::auto_handoff::init(ctx);
+    if network_policy::is_network_enabled() {
+        workspace::auto_handoff::init(ctx);
+    }
     ctx.add_singleton_model(|_| KeybindingChangedNotifier::new());
     ctx.add_singleton_model(|_| TabShortcutModifierState::new());
     ctx.add_singleton_model(|_| search::command_palette::SelectedItems::new());
@@ -2377,7 +2416,9 @@ pub(crate) fn initialize_app(
             window_settings::migrate_legacy_background_backdrop(ctx);
         }
     });
-    ai::custom_endpoints::init(launch_mode, ctx);
+    if network_policy::is_network_enabled() {
+        ai::custom_endpoints::init(launch_mode, ctx);
+    }
 
     // LogManager must be registered before any subsystem (e.g. MCP, LSP) that creates file-based loggers.
     ctx.add_singleton_model(|_| simple_logger::manager::LogManager::new());
@@ -2635,7 +2676,9 @@ pub(crate) fn initialize_app(
 
     // Index global rules (e.g. ~/.agents/AGENTS.md) on a background task so
     // they are available to subsequent agent queries.
-    ProjectContextModel::handle(ctx).update(ctx, |me, ctx| me.index_global_rules(ctx));
+    if network_policy::is_network_enabled() {
+        ProjectContextModel::handle(ctx).update(ctx, |me, ctx| me.index_global_rules(ctx));
+    }
     #[cfg(all(not(target_family = "wasm"), feature = "local_fs"))]
     {
         ctx.add_singleton_model(ai::remote_agent_context::RemoteAgentContext::new);
@@ -2677,8 +2720,10 @@ pub(crate) fn initialize_app(
         LaunchMode::App { .. } | LaunchMode::Test { .. }
     ) && FeatureFlag::WarpControlCli.is_enabled()
     {
-        ctx.add_singleton_model(local_control::LocalControlBridge::new);
-        ctx.add_singleton_model(local_control::LocalControlServer::new);
+        if network_policy::is_network_enabled() {
+            ctx.add_singleton_model(local_control::LocalControlBridge::new);
+            ctx.add_singleton_model(local_control::LocalControlServer::new);
+        }
     }
 
     app_state
@@ -2689,10 +2734,14 @@ pub(crate) fn app_callbacks(
     mut tracing_initialization: Option<tracing::Initialization>,
 ) -> warpui::platform::AppCallbacks {
     warpui::platform::AppCallbacks {
-        on_internet_reachability_changed: Some(Box::new(move |reachable, ctx| {
-            NetworkStatus::handle(ctx)
-                .update(ctx, move |me, ctx| me.reachability_changed(reachable, ctx));
-        })),
+        on_internet_reachability_changed: if network_policy::is_network_enabled() {
+            Some(Box::new(move |reachable, ctx| {
+                NetworkStatus::handle(ctx)
+                    .update(ctx, move |me, ctx| me.reachability_changed(reachable, ctx));
+            }))
+        } else {
+            None
+        },
         on_become_active: Some(Box::new(move |ctx| {
             let auth_state = AuthStateProvider::as_ref(ctx).get();
             ctx.record_app_focus(

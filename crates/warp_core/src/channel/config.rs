@@ -57,6 +57,17 @@ pub struct WarpServerConfig {
 }
 
 impl WarpServerConfig {
+    pub fn intranet() -> Self {
+        Self {
+            server_root_url: "https://disabled.invalid".into(),
+            prewarmed_sandbox_control_url: None,
+            rtc_server_url: "wss://disabled.invalid/graphql/v2".into(),
+            session_sharing_server_url: None,
+            firebase_auth_api_key: "".into(),
+            iap_config: None,
+        }
+    }
+
     pub fn production() -> Self {
         Self {
             server_root_url: "https://app.warp.dev".into(),
@@ -81,6 +92,13 @@ pub struct OzConfig {
 }
 
 impl OzConfig {
+    pub fn intranet() -> Self {
+        Self {
+            oz_root_url: "https://disabled.invalid".into(),
+            workload_audience_url: None,
+        }
+    }
+
     pub fn production() -> Self {
         Self {
             oz_root_url: "https://oz.warp.dev".into(),

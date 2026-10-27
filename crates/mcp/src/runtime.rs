@@ -179,6 +179,9 @@ fn challenge_parameter_names(www_authenticate: &str) -> Vec<&str> {
 pub fn build_client_with_headers(
     headers: &HashMap<String, String>,
 ) -> Result<reqwest::Client, rmcp::RmcpError> {
+    network_policy::require_network().map_err(|err| {
+        rmcp::RmcpError::transport_creation::<ReqwestHttpTransport>(err.to_string())
+    })?;
     let header_map = build_header_map(headers);
 
     reqwest::Client::builder()
@@ -202,6 +205,9 @@ pub async fn spawn_server(
     logger: SimpleLogger,
     auth_context: Option<crate::oauth::AuthContext>,
 ) -> Result<TemplatableMCPServerInfo, rmcp::RmcpError> {
+    network_policy::require_network().map_err(|err| {
+        rmcp::RmcpError::transport_creation::<ReqwestHttpTransport>(err.to_string())
+    })?;
     logger.log("[note] Attention! There may be sensitive information (such as API keys) in these logs. Make sure to redact any secrets before sharing with others.".to_string());
 
     let mut is_authenticated_transport = false;

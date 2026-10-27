@@ -1,0 +1,19 @@
+name: Intranet policy
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - name: Install pinned official Rust toolchain
+        run: rustup toolchain install 1.92.0 --profile minimal
+      - name: Immutable policy tests (no Cargo dependency resolution)
+        run: |
+          rustc +1.92.0 --edition 2024 --test crates/network_policy/src/lib.rs -o /tmp/intranet-policy-tests
+          /tmp/intranet-policy-tests
+      - name: Network boundary regression audit
+        run: python3 script/check-intranet-policy.py

@@ -25,6 +25,9 @@ impl HttpServer {
         routers: impl IntoIterator<Item = axum::Router>,
         _ctx: &mut ModelContext<Self>,
     ) -> Self {
+        if !network_policy::is_network_enabled() {
+            return Self { _runtime: None };
+        }
         let runtime = Self::spawn_server(routers)
             .inspect_err(|err| {
                 log::warn!("Failed to start local HTTP server: {err:#}");
@@ -37,6 +40,8 @@ impl HttpServer {
     fn spawn_server(
         routers: impl IntoIterator<Item = axum::Router>,
     ) -> Result<tokio::runtime::Runtime, std::io::Error> {
+        network_policy::require_network()
+            .map_err(|err| std::io::Error::new(std::io::ErrorKind::PermissionDenied, err))?;
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(1)
             .enable_io()

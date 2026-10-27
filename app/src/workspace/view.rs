@@ -4968,6 +4968,9 @@ impl Workspace {
     }
 
     fn toggle_ai_assistant_panel(&mut self, ctx: &mut ViewContext<Self>) {
+        if !network_policy::is_network_enabled() {
+            return;
+        }
         // Now that the user has interacted with the panel, we can close
         // the dialogue and mark it as dismissed.
         if self.should_show_ai_assistant_warm_welcome {
@@ -6361,6 +6364,9 @@ impl Workspace {
         appearance: &Appearance,
         ctx: &AppContext,
     ) -> Option<Box<dyn Element>> {
+        if !network_policy::is_network_enabled() {
+            return None;
+        }
         let user_workspaces = UserWorkspaces::as_ref(ctx);
         let current_team = user_workspaces.team_for_window(self.window_id);
         let has_joinable_teams = user_workspaces
@@ -10003,6 +10009,20 @@ impl Workspace {
     }
 
     fn user_menu_items(&self, app: &AppContext) -> Vec<MenuItem<WorkspaceAction>> {
+        if !network_policy::is_network_enabled() {
+            return vec![
+                MenuItemFields::new("Settings")
+                    .with_on_select_action(WorkspaceAction::ShowSettings)
+                    .into_item(),
+                MenuItemFields::new("Keyboard shortcuts")
+                    .with_on_select_action(WorkspaceAction::ToggleKeybindingsPage)
+                    .into_item(),
+                #[cfg(not(target_family = "wasm"))]
+                MenuItemFields::new("View local logs")
+                    .with_on_select_action(WorkspaceAction::ViewLogs)
+                    .into_item(),
+            ];
+        }
         let mut items = Vec::new();
         if !self.auth_state.is_anonymous_or_logged_out() {
             let name = self.auth_state.username_for_display().unwrap_or_default();
@@ -21649,7 +21669,8 @@ impl Workspace {
         }
 
         // Legacy AI assistant button (non-agent-mode only)
-        if is_online
+        if network_policy::is_network_enabled()
+            && is_online
             && !FeatureFlag::AgentMode.is_enabled()
             && !is_web_anonymous_user
             && !self.current_workspace_state.is_ai_assistant_panel_open
@@ -21679,7 +21700,10 @@ impl Workspace {
             );
         } else {
             let resource_center_closed = !self.current_workspace_state.is_resource_center_open;
-            if resource_center_closed && ContextFlag::WarpEssentials.is_enabled() {
+            if network_policy::is_network_enabled()
+                && resource_center_closed
+                && ContextFlag::WarpEssentials.is_enabled()
+            {
                 target.add_child(
                     Container::new(self.render_resource_center_button(appearance, ctx))
                         .with_margin_left(TAB_BAR_PADDING_LEFT)
@@ -23911,6 +23935,9 @@ impl Workspace {
         entrypoint: AnonymousUserSignupEntrypoint,
         ctx: &mut ViewContext<Self>,
     ) {
+        if !network_policy::is_network_enabled() {
+            return;
+        }
         if self.auth_state.is_user_anonymous().unwrap_or_default() {
             // User has a Firebase anonymous account — use the linking flow.
             AuthManager::handle(ctx).update(ctx, |auth_manager, ctx| {
@@ -23930,6 +23957,9 @@ impl Workspace {
     }
 
     fn redirect_to_sign_in(&mut self) {
+        if !network_policy::is_network_enabled() {
+            return;
+        }
         #[cfg(target_family = "wasm")]
         if let Some(current_url) = parse_current_url() {
             update_browser_url(
@@ -24164,6 +24194,35 @@ impl TypedActionView for Workspace {
 
     fn handle_action(&mut self, action: &Self::Action, ctx: &mut ViewContext<Self>) {
         use WorkspaceAction::*;
+        if !network_policy::is_network_enabled() {
+            match action {
+                LogOut
+                | Reauth
+                | SignInAnonymousWebUser
+                | ShowUpgrade
+                | ShowReferralSettingsPage
+                | JoinSlack
+                | ViewUserDocs
+                | ViewLatestChangelog
+                | ViewPrivacyPolicy
+                | SendFeedback
+                | CheckForUpdate
+                | ApplyUpdate
+                | DownloadNewVersion
+                | ToggleResourceCenter
+                | ToggleAIAssistant
+                | ClickedAIAssistantIcon
+                | ShowAIAssistantWarmWelcome
+                | ClickedAIAssistantWarmWelcome
+                | SignupAnonymousUser
+                | AddAgentTab
+                | AddAmbientAgentTab
+                | AddGetStartedTab => return,
+                #[cfg(target_os = "macos")]
+                InstallOz | UninstallOz | InstallWarpctrl | UninstallWarpctrl => return,
+                _ => {}
+            }
+        }
         let window_id = ctx.window_id();
 
         if self.auth_state.is_anonymous_or_logged_out() && action.blocked_for_anonymous_user() {

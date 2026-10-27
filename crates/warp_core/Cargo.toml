@@ -15,6 +15,7 @@ standalone = []
 test-util = ["dep:mockito", "warp_features/test-util"]
 
 [dependencies]
+network_policy.workspace = true
 anyhow.workspace = true
 cfg-if.workspace = true
 command-corrections.workspace = true

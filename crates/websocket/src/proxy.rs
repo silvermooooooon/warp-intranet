@@ -70,6 +70,7 @@ pub async fn connect_via_proxy(
     proxy: &ProxyInfo,
     target_uri: &http::Uri,
 ) -> anyhow::Result<TcpStream> {
+    network_policy::require_network()?;
     let target_host = target_uri.host().context("Target URI has no host")?;
     let is_tls = target_uri.scheme_str() == Some("wss") || target_uri.scheme_str() == Some("https");
     let default_port: u16 = if is_tls { 443 } else { 80 };

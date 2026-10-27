@@ -9,6 +9,7 @@ license.workspace = true
 test-util = []
 
 [dependencies]
+network_policy.workspace = true
 anyhow.workspace = true
 async-compat.workspace = true
 async-stream.workspace = true

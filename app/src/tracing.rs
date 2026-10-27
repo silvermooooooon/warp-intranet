@@ -14,6 +14,11 @@ mod native;
 const DEFAULT_EXPORT_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub fn init() -> anyhow::Result<Initialization> {
+    if !network_policy::is_network_enabled() {
+        install_no_subscriber()?;
+        return Ok(Initialization::default());
+    }
+
     #[cfg(target_family = "wasm")]
     {
         install_no_subscriber()?;
@@ -28,6 +33,10 @@ pub fn init() -> anyhow::Result<Initialization> {
 pub(crate) fn create_child_process_handoff(
     scope_file: &std::path::Path,
 ) -> Option<tempfile::TempPath> {
+    if !network_policy::is_network_enabled() {
+        return None;
+    }
+
     native::child_process_snapshot()?
         .write(scope_file)
         .map_err(|_| {
@@ -40,6 +49,10 @@ pub(crate) fn create_child_process_handoff(
 pub(crate) fn init_child_process(
     scope_file: &std::path::Path,
 ) -> anyhow::Result<(Initialization, opentelemetry::Context)> {
+    if !network_policy::is_network_enabled() {
+        return Ok((Initialization::default(), opentelemetry::Context::new()));
+    }
+
     let config =
         child_process::ChildProcessTracingConfig::consume(scope_file).unwrap_or_else(|_| {
             log::warn!("Child-process tracing unavailable: invalid credential handoff");
@@ -58,6 +71,10 @@ pub fn start_auth_refresh(
     client: std::sync::Arc<crate::server::server_api::managed_secrets::AppManagedSecretsClient>,
     ctx: &mut warpui::AppContext,
 ) {
+    if !network_policy::is_network_enabled() {
+        return;
+    }
+
     native::start_auth_refresh(client, ctx);
 }
 

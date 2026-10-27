@@ -216,6 +216,10 @@ impl AuthView {
     }
 
     pub fn start_sign_in(&mut self, ctx: &mut ViewContext<Self>) {
+        if !network_policy::is_network_enabled() {
+            return;
+        }
+
         self.update_auth_body(ctx, |body, ctx| {
             body.handle_action(&AuthViewBodyAction::Login, ctx);
         });

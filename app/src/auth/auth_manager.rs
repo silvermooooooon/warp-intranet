@@ -186,6 +186,10 @@ impl AuthManager {
         enforce_state_validation: bool,
         ctx: &mut ModelContext<Self>,
     ) {
+        if !network_policy::is_network_enabled() {
+            return;
+        }
+
         let AuthRedirectPayload {
             refresh_token,
             user_uid,
@@ -263,6 +267,10 @@ impl AuthManager {
         auth_payload: AuthRedirectPayload,
         ctx: &mut ModelContext<Self>,
     ) {
+        if !network_policy::is_network_enabled() {
+            return;
+        }
+
         let AuthRedirectPayload {
             refresh_token,
             user_uid: _,
@@ -287,6 +295,10 @@ impl AuthManager {
 
     #[cfg(target_family = "wasm")]
     pub fn initialize_user_from_session_cookie(&self, ctx: &mut ModelContext<Self>) {
+        if !network_policy::is_network_enabled() {
+            return;
+        }
+
         let auth_client = self.auth_client.clone();
         let _ = ctx.spawn(
             async move {
@@ -300,6 +312,10 @@ impl AuthManager {
 
     /// Refreshes the user's auth state using their existing credentials.
     pub fn refresh_user(&self, ctx: &mut ModelContext<Self>) {
+        if !network_policy::is_network_enabled() {
+            return;
+        }
+
         let Some(credentials) = self.auth_state.credentials() else {
             log::warn!("Attempted to refresh user without credentials");
             return;
@@ -322,6 +338,10 @@ impl AuthManager {
     /// after the server accepts the key. A failed request leaves the client
     /// fully logged out.
     pub fn authenticate_api_key(&self, api_key: String, ctx: &mut ModelContext<Self>) {
+        if !network_policy::is_network_enabled() {
+            return;
+        }
+
         log::info!("Authenticating via pending API key");
         let api_key = if api_key.starts_with(API_KEY_PREFIX) {
             api_key
@@ -344,6 +364,10 @@ impl AuthManager {
     /// This is only used by the Warp CLI if running on a device that does not have the Warp app installed.
     #[cfg_attr(target_family = "wasm", allow(dead_code))]
     pub fn authorize_device(&self, ctx: &mut ModelContext<Self>) {
+        if !network_policy::is_network_enabled() {
+            return;
+        }
+
         // Clear any stale user state so old credentials don't interfere
         // with the fresh device auth flow.
         self.auth_state.set_credentials(None);
@@ -409,6 +433,10 @@ impl AuthManager {
         fetch_user_result: StdResult<FetchUserResult, UserAuthenticationError>,
         ctx: &mut ModelContext<Self>,
     ) {
+        if !network_policy::is_network_enabled() {
+            return;
+        }
+
         match fetch_user_result {
             Ok(fetch_user_result) => {
                 let FetchUserResult {
@@ -670,6 +698,10 @@ impl AuthManager {
         referral_code: Option<String>,
         ctx: &mut ModelContext<Self>,
     ) {
+        if !network_policy::is_network_enabled() {
+            return;
+        }
+
         let anonymous_user_type = AnonymousUserType::NativeClientAnonymousUserFeatureGated;
 
         let auth_client = self.auth_client.clone();
@@ -688,6 +720,10 @@ impl AuthManager {
         response: Result<CreateAnonymousUserResult>,
         ctx: &mut ModelContext<Self>,
     ) {
+        if !network_policy::is_network_enabled() {
+            return;
+        }
+
         let custom_token = match response {
             Ok(response_data) => match response_data {
                 CreateAnonymousUserResult::CreateAnonymousUserOutput(output) => Ok(output.id_token),
@@ -733,6 +769,10 @@ impl AuthManager {
         auth_view_variant: AuthViewVariant,
         ctx: &mut ModelContext<Self>,
     ) {
+        if !network_policy::is_network_enabled() {
+            return;
+        }
+
         if self.auth_state.is_anonymous_or_logged_out() {
             send_telemetry_from_ctx!(
                 TelemetryEvent::AnonymousUserAttemptLoginGatedFeature { feature },
@@ -743,6 +783,10 @@ impl AuthManager {
     }
 
     pub fn anonymous_user_hit_drive_object_limit(&self, ctx: &mut ModelContext<Self>) {
+        if !network_policy::is_network_enabled() {
+            return;
+        }
+
         if self.auth_state.is_anonymous_or_logged_out() {
             send_telemetry_from_ctx!(TelemetryEvent::AnonymousUserHitCloudObjectLimit, ctx);
             ctx.emit(AuthManagerEvent::AttemptedLoginGatedFeature {
@@ -756,6 +800,10 @@ impl AuthManager {
         entrypoint: AnonymousUserSignupEntrypoint,
         ctx: &mut ModelContext<Self>,
     ) {
+        if !network_policy::is_network_enabled() {
+            return;
+        }
+
         let auth_client = self.auth_client.clone();
         let _ = ctx.spawn(
             async move { auth_client.fetch_new_custom_token().await },
@@ -805,6 +853,10 @@ impl AuthManager {
         ctx: &mut ModelContext<Self>,
         construct_url: URLConstructorCallback,
     ) {
+        if !network_policy::is_network_enabled() {
+            return;
+        }
+
         if !self.auth_state.is_user_anonymous().unwrap_or_default()
             || !self.auth_state.is_logged_in()
         {
@@ -835,6 +887,10 @@ impl AuthManager {
     }
 
     pub fn copy_anonymous_user_linking_url_to_clipboard(&self, ctx: &mut ModelContext<Self>) {
+        if !network_policy::is_network_enabled() {
+            return;
+        }
+
         if !self.auth_state.is_user_anonymous().unwrap_or_default() {
             return;
         }
@@ -970,6 +1026,10 @@ impl AuthManager {
     /// 1. Updates the server by calling set_user_is_onboarded
     /// 2. Updates the local auth state and persists the user data
     pub fn set_user_onboarded(&self, ctx: &mut ModelContext<Self>) {
+        if !network_policy::is_network_enabled() {
+            return;
+        }
+
         // Update server
         let auth_client = self.auth_client.clone();
         let _ = ctx.spawn(

@@ -181,6 +181,9 @@ impl ToSentryTags for CrashRecoveryMetadata {
 /// Initializes the crash reporting subsystem.  Returns whether or not crash
 /// reporting is active.
 pub(crate) fn init(ctx: &mut AppContext) -> bool {
+    if !network_policy::is_network_enabled() {
+        return false;
+    }
     if !FeatureFlag::CrashReporting.is_enabled() {
         log::info!("Crash reporting FeatureFlag is disabled; not initializing sentry.");
         return false;
@@ -294,6 +297,9 @@ fn get_environment() -> Cow<'static, str> {
 /// This must be called from the main thread to capture panics/crashes across the entire
 /// application.
 fn init_sentry(user_id: Option<UserUid>, email: Option<String>, ctx: &mut AppContext) {
+    if !network_policy::is_network_enabled() {
+        return;
+    }
     let key = release_version();
 
     let environment = Some(get_environment());
@@ -393,9 +399,13 @@ fn init_sentry(user_id: Option<UserUid>, email: Option<String>, ctx: &mut AppCon
 /// Baseline Sentry client options.
 fn sentry_client_options() -> sentry::ClientOptions {
     sentry::ClientOptions {
-        dsn: ChannelState::sentry_url()
-            .into_dsn()
-            .expect("Invalid Sentry DSN"),
+        dsn: if network_policy::is_network_enabled() {
+            ChannelState::sentry_url()
+                .into_dsn()
+                .expect("Invalid Sentry DSN")
+        } else {
+            None
+        },
 
         release: Some(release_version().into()),
         environment: Some(get_environment()),
@@ -436,6 +446,9 @@ pub fn uninit_sentry() {
 /// Initializes sentry hooking into the uncaught exception handler of the mac runtime
 /// which allows us to catch errors within obj-c.
 pub fn init_cocoa_sentry() {
+    if !network_policy::is_network_enabled() {
+        return;
+    }
     #[cfg(all(target_os = "macos", feature = "cocoa_sentry"))]
     {
         mac::init_cocoa_sentry();

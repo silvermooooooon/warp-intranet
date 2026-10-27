@@ -1575,6 +1575,9 @@ impl TypedActionView for FeaturesPageView {
                 });
             }
             OpenUrl(url) => {
+                if !network_policy::is_network_enabled() {
+                    return;
+                }
                 ctx.open_url(url.as_str());
             }
             SetGlobalHotkeyMode(mode) => self.set_global_hotkey_mode(mode, ctx),
@@ -2778,9 +2781,10 @@ impl FeaturesPageView {
             vec![Box::new(DefaultSessionModeWidget::default())];
 
         let native_preference_settings = NativePreferenceSettings::as_ref(ctx);
-        if native_preference_settings
-            .user_native_redirect_preference
-            .is_supported_on_current_platform()
+        if network_policy::is_network_enabled()
+            && native_preference_settings
+                .user_native_redirect_preference
+                .is_supported_on_current_platform()
         {
             general_widgets.push(Box::new(NativeRedirectWidget::default()));
         }
@@ -2818,9 +2822,10 @@ impl FeaturesPageView {
         }
 
         let changelog_settings = ChangelogSettings::as_ref(ctx);
-        if changelog_settings
-            .show_changelog_after_update
-            .is_supported_on_current_platform()
+        if network_policy::is_network_enabled()
+            && changelog_settings
+                .show_changelog_after_update
+                .is_supported_on_current_platform()
         {
             general_widgets.push(Box::new(ShowChangelogWidget::default()));
         }
@@ -4701,7 +4706,9 @@ impl SettingsWidget for SessionRestorationWidget {
             let link = ui_builder
                 .link(
                     "See docs.".to_owned(),
-                    Some("https://docs.warp.dev/terminal/sessions/session-restoration".to_owned()),
+                    network_policy::is_network_enabled().then(|| {
+                        "https://docs.warp.dev/terminal/sessions/session-restoration".to_owned()
+                    }),
                     None,
                     self.docs_link.clone(),
                 )
@@ -5657,10 +5664,10 @@ impl SettingsWidget for GlobalHotkeyWidget {
                         ui_builder
                             .link(
                                 "See docs.".to_owned(),
-                                Some(
+                                network_policy::is_network_enabled().then(|| {
                                     "https://docs.warp.dev/terminal/windows/global-hotkey"
-                                        .to_owned(),
-                                ),
+                                        .to_owned()
+                                }),
                                 None,
                                 view.button_mouse_states.global_hotkey_link.clone(),
                             )

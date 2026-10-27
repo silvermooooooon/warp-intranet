@@ -1,0 +1,53 @@
+name: Intranet macOS arm64 candidate
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    # Standard public-repository runner only: never select a paid/larger/self-hosted runner.
+    if: github.event.repository.private == false
+    runs-on: macos-15
+    timeout-minutes: 180
+    env:
+      CARGO_BUILD_JOBS: '1'
+      CARGO_PROFILE_RELEASE_DEBUG: '0'
+      CARGO_PROFILE_RELEASE_LTO: 'false'
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: '256'
+      CARGO_PROFILE_RELEASE_OPT_LEVEL: '1'
+      MACOSX_DEPLOYMENT_TARGET: '11.0'
+      INTRANET_THIRD_PARTY_LICENSES: intranet-third-party-licenses.txt
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - name: Require a native Apple Silicon runner
+        run: test "$(uname -m)" = arm64
+      - name: Prepare approved public build dependencies
+        run: |
+          rustup toolchain install 1.92.0 --profile minimal
+          rustup target add aarch64-apple-darwin --toolchain 1.92.0
+          brew install cmake pkg-config protobuf
+          if ! xcrun --find metal >/dev/null 2>&1; then
+            xcodebuild -downloadComponent MetalToolchain
+          fi
+          cargo +1.92.0 install cargo-about --version 0.8.4 --locked
+      - name: Audit immutable network policy
+        run: |
+          python3 script/check-intranet-policy.py
+          rustc +1.92.0 --edition 2024 --test crates/network_policy/src/lib.rs -o /tmp/intranet-policy-tests
+          /tmp/intranet-policy-tests
+      - name: Generate dependency attribution
+        run: |
+          cargo +1.92.0 about generate --workspace --manifest-path Cargo.toml \
+            -c about.toml -o "$INTRANET_THIRD_PARTY_LICENSES" about.hbs
+      - name: Build and package candidate (not runtime certification)
+        run: script/build-intranet-macos.sh
+      - name: Upload candidate for native acceptance
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: warp-intranet-macos-arm64-${{ github.sha }}
+          path: |
+            dist/**/*.zip
+            dist/**/BUILD-INFO.txt
+            dist/**/SHA256SUMS
+          retention-days: 7
+          if-no-files-found: error

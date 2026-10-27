@@ -370,6 +370,7 @@ impl AuthenticatedHttpClient {
 #[async_trait]
 impl HttpClient for AuthenticatedHttpClient {
     async fn send_bytes(&self, mut request: Request<Bytes>) -> Result<Response<Bytes>, HttpError> {
+        network_policy::require_network()?;
         self.authorize_request(&mut request)?;
 
         let request: reqwest::Request = request.try_into()?;

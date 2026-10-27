@@ -253,6 +253,7 @@ struct CallbackData {
 
 /// Binds the loopback callback server to the fixed redirect address.
 fn bind_callback_listener() -> anyhow::Result<TcpListener> {
+    network_policy::require_network()?;
     let listener = TcpListener::bind((REDIRECT_HOST, REDIRECT_PORT)).with_context(|| {
         format!(
             "couldn't bind the Grok OAuth callback server to {REDIRECT_HOST}:{REDIRECT_PORT}. \

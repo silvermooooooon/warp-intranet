@@ -168,6 +168,10 @@ pub struct FileMCPWatcher {
 
 impl FileMCPWatcher {
     pub fn new(ctx: &mut ModelContext<Self>) -> Self {
+        if !network_policy::is_network_enabled() {
+            return Self::new_inert();
+        }
+
         let (file_mcp_tx, file_mcp_rx) = async_channel::unbounded::<FileMCPDetectionMessage>();
         let settings_mode = settings::settings_mode();
 
@@ -249,9 +253,7 @@ impl FileMCPWatcher {
         watcher
     }
 
-    /// A watcher with no filesystem subscriptions and no owed scans, so tests can feed
-    /// consumers a deterministic event sequence.
-    #[cfg(test)]
+    /// A watcher with no filesystem subscriptions and no pending scans.
     pub(crate) fn new_inert() -> Self {
         Self {
             file_mcp_tx: async_channel::unbounded().0,

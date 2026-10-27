@@ -93,6 +93,10 @@ impl TelemetryApi {
     // Batches up telemetry events from the global queue and sends a Message to the Rudderstack API.
     // Returns the number of events that were flushed.
     pub async fn flush_events(&self, settings_snapshot: PrivacySettingsSnapshot) -> Result<usize> {
+        if !network_policy::is_network_enabled() {
+            clear_event_queue();
+            return Ok(0);
+        }
         let events = warpui::telemetry::flush_events();
         let event_count = events.len();
 
@@ -122,6 +126,10 @@ impl TelemetryApi {
         path: &Path,
         settings_snapshot: PrivacySettingsSnapshot,
     ) -> Result<()> {
+        if !network_policy::is_network_enabled() {
+            clear_event_queue();
+            return Ok(());
+        }
         if path.exists() {
             let file = File::open(path)?;
             let events: Vec<RudderBatchMessage> = serde_json::from_reader(file)?;
@@ -150,6 +158,10 @@ impl TelemetryApi {
         max_event_count: usize,
         settings_snapshot: PrivacySettingsSnapshot,
     ) -> Result<()> {
+        if !network_policy::is_network_enabled() {
+            clear_event_queue();
+            return Ok(());
+        }
         self.flush_and_persist_events_at_path(
             max_event_count,
             settings_snapshot,
@@ -219,6 +231,10 @@ impl TelemetryApi {
         event: impl warp_core::telemetry::TelemetryEvent,
         settings_snapshot: PrivacySettingsSnapshot,
     ) -> Result<()> {
+        if !network_policy::is_network_enabled() {
+            clear_event_queue();
+            return Ok(());
+        }
         let event = warpui::telemetry::create_event(
             user_id.map(|uid| uid.as_string()),
             anonymous_id,

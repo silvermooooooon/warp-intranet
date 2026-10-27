@@ -135,6 +135,14 @@ impl FromStr for UriHost {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self> {
+        ensure!(
+            network_policy::is_network_enabled()
+                || matches!(
+                    s,
+                    "action" | "launch" | "settings" | "tab_config" | "session"
+                ),
+            "service URI hosts are disabled in Warp Intranet"
+        );
         match s {
             "auth" => Ok(Self::Auth),
             "team" => Ok(Self::Team),
@@ -162,6 +170,14 @@ impl FromStr for UriHost {
 
 impl UriHost {
     fn handle(&self, primary_window_id: Option<WindowId>, url: &Url, ctx: &mut AppContext) {
+        if !network_policy::is_network_enabled()
+            && !matches!(
+                self,
+                Self::Action | Self::Launch | Self::Settings | Self::TabConfig | Self::Session
+            )
+        {
+            return;
+        }
         // Handle host
         match self {
             UriHost::Auth => {
@@ -383,6 +399,11 @@ impl UriHost {
                 }
             }
             UriHost::Settings => {
+                if !network_policy::is_network_enabled()
+                    && !matches!(url.path(), "" | "/" | "/appearance")
+                {
+                    return;
+                }
                 // We support opening different settings pages through URI:
                 // - warp://settings - opens a settings tab on the default page
                 // - warp://settings?q={query} - opens settings with the search bar pre-filled
@@ -966,6 +987,18 @@ enum Action {
 
 impl Action {
     fn parse(url: &Url) -> Result<Self> {
+        ensure!(
+            network_policy::is_network_enabled()
+                || matches!(
+                    url.path(),
+                    "/new_tab"
+                        | "/new_window"
+                        | "/open_file_editor"
+                        | "/docker/open_subshell"
+                        | "/open-repo"
+                ),
+            "service URI actions are disabled in Warp Intranet"
+        );
         match url.path() {
             "/new_tab" => Ok(Self::NewTab),
             "/new_window" => Ok(Self::NewWindow),
@@ -998,6 +1031,18 @@ impl Action {
     }
 
     fn handle(&self, primary_window_id: Option<WindowId>, url: &Url, ctx: &mut AppContext) {
+        if !network_policy::is_network_enabled()
+            && !matches!(
+                self,
+                Self::NewTab
+                    | Self::NewWindow
+                    | Self::OpenFileEditor { .. }
+                    | Self::Docker
+                    | Self::OpenRepo
+            )
+        {
+            return;
+        }
         #[cfg(any(target_os = "linux", target_os = "freebsd"))]
         let primary_window_id = self.window_behavior_hint().resolve(primary_window_id, ctx);
         match self {
@@ -1720,6 +1765,17 @@ fn validate_custom_uri(url: &Url) -> Result<UriHost> {
         .ok_or_else(|| anyhow!("Received url with no host str"))?;
 
     let host = UriHost::from_str(host_str)?;
+    if !network_policy::is_network_enabled() {
+        if host == UriHost::Settings {
+            ensure!(
+                matches!(url.path(), "" | "/" | "/appearance"),
+                "service settings URIs are disabled in Warp Intranet"
+            );
+        }
+        if host == UriHost::Action {
+            Action::parse(url)?;
+        }
+    }
 
     // Check if this host is allowed to have arbitrary paths.
     let host_allows_arbitrary_path = match host {
@@ -1767,3 +1823,6 @@ fn decode_uuid_hex(hex: &str) -> Option<Vec<u8>> {
 #[cfg(test)]
 #[path = "uri_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod intranet_tests;

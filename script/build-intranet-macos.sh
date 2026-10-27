@@ -25,7 +25,8 @@ if [[ -z ${INTRANET_THIRD_PARTY_LICENSES:-} || ! -s "$INTRANET_THIRD_PARTY_LICEN
   exit 1
 fi
 
-cargo_args=()
+# Keep this array nonempty: macOS /bin/bash 3.2 rejects empty arrays under set -u.
+cargo_args=(+1.92.0)
 if [[ -n ${INTRANET_VENDOR_CONFIG:-} ]]; then
   [[ -f "$INTRANET_VENDOR_CONFIG" ]] || { echo 'Vendor config not found' >&2; exit 1; }
   cargo_args+=(--config "$INTRANET_VENDOR_CONFIG")
@@ -37,7 +38,7 @@ fi
 # Avoid unexpectedly consuming many cores. Callers may opt into a larger approved builder.
 export CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS:-2}
 export MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET:-11.0}
-cargo +1.92.0 "${cargo_args[@]}" build "${build_args[@]}"
+cargo "${cargo_args[@]}" build "${build_args[@]}"
 
 binary="${CARGO_TARGET_DIR:-target}/aarch64-apple-darwin/release/warp-oss"
 [[ -x "$binary" ]] || { echo "Missing executable: $binary" >&2; exit 1; }

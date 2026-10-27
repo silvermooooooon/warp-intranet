@@ -20,8 +20,8 @@
   账号/云同步/托管 AI/共享会话的特性入口。新上游 feature flag 需要显式审核后才能编译。
 - **终端优先的默认构建特性**：不默认启用 AI、云功能、MCP、语音、分类模型或 agent skills。
 - **隔离上游自动化**：原厂 release/bot/sync 工作流归档到 `.github/upstream-workflows`。
-  当前仅保留手动触发的策略检查和公共标准 macOS arm64 构建候选流程；
-  发布源码不会自动下载/构建依赖，不发布 release。
+  当前仅保留手动策略检查，以及手动或带 `[verify-intranet-macos]` 提交标记触发的
+  公共标准 macOS arm64 构建候选流程；普通源码推送不启动构建，不发布 release。
 
 用户在 shell 中运行的 `ssh`、`git`、`curl` 以及 shell 初始化脚本**不受这个应用策略限制**；
 这是为了保留正常内网工作能力。策略也不是 macOS 系统级防火墙，不能替代组织出口控制。
@@ -37,14 +37,17 @@
 
 | 检查 | 当前证据 |
 | --- | --- |
-| 不可变策略 Rust 单测 | 本次云端 Linux 已通过 2/2 |
-| feature 策略单测 | 隔离 crate + test-util 策略测试 4/4；用了 enum-iterator 1.5.0（整仓锁定 1.4.1），不等同锁定依赖/整仓编译 |
+| 不可变策略 Rust 单测 | 锁定依赖的实际 Cargo 测试已通过 2/2 |
+| feature crate 单测 | 锁定 enum-iterator 1.4.1，6 通过、1 个上游原有忽略；包括 4 项内网策略测试 |
 | 静态网络出口回归检查 | 已通过；只检查已列明的直接出口和关键 guard，不是形式化零联网证明 |
-| HTTP/SSE/OAuth/WS/远程资源运行测试 | 已增加；依赖获取中断后，整仓测试尚未执行 |
+| HTTP/WS/asset_cache 全库单测 | 48/48 通过，含 DNS 前拒绝、代理/重定向、OAuth、SSE、loopback、凭据不读取/泄露 |
+| 路径隔离单测 | Linux 路径与跨前端身份映射 13/13 通过；macOS 专用分支仍需原生验证 |
+| 相关库 Clippy | network_policy/warp_features/http_client/websocket/asset_cache，所有 target/tests，`-D warnings` 通过 |
 | macOS arm64 编译/打包/启动 | 尚未验证；不提供伪造的“成功”二进制 |
 | macOS 断网、代理、重定向抓包及内网 SSH | 尚未验证；必须按验收清单完成 |
 
-构建和测试结果以最终提交的运行记录为准，不以工作流文件存在作为成功证据。
+上述锁定依赖检查共 69 个测试通过、1 个上游原有忽略；不等于整工作区/GUI 测试。
+详见 [验证记录](docs/intranet/VALIDATION.md)。工作流文件存在不代表 macOS 构建已经成功。
 
 ## 构建与验收
 

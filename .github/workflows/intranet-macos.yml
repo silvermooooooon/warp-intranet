@@ -1,12 +1,17 @@
 name: Intranet macOS arm64 candidate
 on:
   workflow_dispatch:
+  push:
+    branches: [intranet-macos]
 permissions:
   contents: read
 jobs:
   build:
     # Standard public-repository runner only: never select a paid/larger/self-hosted runner.
-    if: github.event.repository.private == false
+    if: >-
+      github.event.repository.private == false &&
+      (github.event_name == 'workflow_dispatch' ||
+       contains(github.event.head_commit.message, '[verify-intranet-macos]'))
     runs-on: macos-15
     timeout-minutes: 180
     env:
@@ -26,9 +31,10 @@ jobs:
           rustup toolchain install 1.92.0 --profile minimal
           rustup target add aarch64-apple-darwin --toolchain 1.92.0
           brew install cmake pkg-config protobuf
-          if ! xcrun --find metal >/dev/null 2>&1; then
+          if ! xcrun --sdk macosx metal --version >/dev/null 2>&1; then
             xcodebuild -downloadComponent MetalToolchain
           fi
+          xcrun --sdk macosx metal --version
           cargo +1.92.0 install cargo-about --version 0.8.4 --locked
       - name: Audit immutable network policy
         run: |
@@ -41,6 +47,14 @@ jobs:
             -c about.toml -o "$INTRANET_THIRD_PARTY_LICENSES" about.hbs
       - name: Build and package candidate (not runtime certification)
         run: script/build-intranet-macos.sh
+      - name: Native loader and CLI smoke check outside the checkout
+        run: |
+          app=$(find "$PWD/dist" -type d -name 'Warp Intranet.app' -print -quit)
+          test -n "$app"
+          smoke_dir=$(mktemp -d)
+          cd "$smoke_dir"
+          "$app/Contents/MacOS/warp-oss" --help > "$app/../CLI-HELP.txt"
+          test -s "$app/../CLI-HELP.txt"
       - name: Upload candidate for native acceptance
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
@@ -48,6 +62,7 @@ jobs:
           path: |
             dist/**/*.zip
             dist/**/BUILD-INFO.txt
+            dist/**/CLI-HELP.txt
             dist/**/SHA256SUMS
           retention-days: 7
           if-no-files-found: error

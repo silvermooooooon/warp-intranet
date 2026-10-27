@@ -230,7 +230,8 @@ Metal/protoc 是否就绪必须在实际 job 中检测，缺失时在联网 job 
 
 建议独立、手动触发的最小 workflow：只读 repo 权限 → 固定 action SHA 与源码提交 → checkout LFS →
 记录 runner/Xcode/SDK/工具版本 → Metal 真实编译 → fixed lockfile 构建 → 内网 app 打包 →
-静态签名/架构/资源检查 → 上传测试 artifact 和校验清单。无需 Warp 账号、GCP 或 Apple 分发凭据。
+静态签名/架构/资源检查 → 脱离源码目录运行 `--help` 验证原生加载器 →
+上传测试 artifact 和校验清单。无需 Warp 账号、GCP 或 Apple 分发凭据。
 不要运行继承的发布/同步/云代理 workflow，不要在此步骤发布 Release 或泄露用户配置。
 
 这是**可行候选路线，而非已跑通结论**：上游 `ci.yml` 使用 Namespace mac profile，release 配置
@@ -239,7 +240,8 @@ Metal/protoc 是否就绪必须在实际 job 中检测，缺失时在联网 job 
 CI 成功也不能替代真实 M 系列 Mac 上 Metal/UI、完全断网首次启动及 shell 内网通信验收。
 
 本 fork 已提供 `.github/workflows/intranet-macos.yml`，但**存在 workflow 文件不表示已经执行或成功**。
-它只接受手动触发，限定公开仓库、标准 `macos-15`，不自动发布。
+它接受手动触发，或 `intranet-macos` 分支上明确带 `[verify-intranet-macos]` 的提交；
+限定公开仓库、标准 `macos-15`，普通源码推送不启动构建，不自动发布。
 当前为降低资源压力使用 `jobs=1`、`opt-level=1`、`debug=0`、`lto=false`、
 `codegen-units=256`，因此产物是低优化验证候选，不能作为普通 release 性能结论。
 它不 hydrate LFS classifier 模型，因为默认不启用相关模型 feature；这是有意省略，

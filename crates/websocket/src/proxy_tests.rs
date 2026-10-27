@@ -1,7 +1,6 @@
 use std::sync::Mutex;
 
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpListener;
+use std::net::TcpListener;
 
 use super::*;
 
@@ -327,107 +326,75 @@ fn parse_proxy_url_decodes_percent_encoded_credentials() {
     assert_eq!(decoded, "user@name:p:ss");
 }
 
-// -- connect_via_proxy integration test with mock proxy --
+// Proxy negotiation is intentionally unavailable in the intranet distribution.
 
 #[tokio::test]
-async fn connect_via_proxy_sends_correct_connect_request() {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-
+async fn connect_via_proxy_is_rejected_before_opening_a_socket() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
     let proxy_info = ProxyInfo {
         host: "127.0.0.1".to_string(),
-        port: addr.port(),
+        port: listener.local_addr().unwrap().port(),
         basic_auth: None,
     };
-
-    // Spawn a mock proxy that reads the CONNECT request and responds with 200.
-    let mock_proxy = tokio::spawn(async move {
-        let (mut socket, _) = listener.accept().await.unwrap();
-        let mut buf = vec![0u8; 1024];
-        let n = socket.read(&mut buf).await.unwrap();
-        let request = String::from_utf8_lossy(&buf[..n]).to_string();
-        socket
-            .write_all(b"HTTP/1.1 200 Connection established\r\n\r\n")
-            .await
-            .unwrap();
-        request
-    });
-
     let target_uri: http::Uri = "wss://target.example.com:443".parse().unwrap();
-    let result = connect_via_proxy(&proxy_info, &target_uri).await;
-    assert!(result.is_ok(), "connect_via_proxy should succeed");
 
-    let request_sent = mock_proxy.await.unwrap();
-    let request_lower = request_sent.to_lowercase();
-    assert!(request_sent.starts_with("CONNECT target.example.com:443 HTTP/1.1\r\n"));
+    let error = connect_via_proxy(&proxy_info, &target_uri)
+        .await
+        .unwrap_err();
+
     assert!(
-        request_lower.contains("host: target.example.com:443\r\n"),
-        "Request should contain Host header: {request_sent}"
+        error
+            .downcast_ref::<network_policy::NetworkDisabled>()
+            .is_some()
+    );
+    assert_eq!(
+        listener.accept().unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
     );
 }
 
 #[tokio::test]
-async fn connect_via_proxy_sends_auth_header() {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-
+async fn proxy_credentials_cannot_restore_a_connection_or_leak_in_errors() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
     let proxy_info = ProxyInfo {
         host: "127.0.0.1".to_string(),
-        port: addr.port(),
+        port: listener.local_addr().unwrap().port(),
         basic_auth: Some(BASE64.encode("user:secret")),
     };
-
-    let mock_proxy = tokio::spawn(async move {
-        let (mut socket, _) = listener.accept().await.unwrap();
-        let mut buf = vec![0u8; 1024];
-        let n = socket.read(&mut buf).await.unwrap();
-        let request = String::from_utf8_lossy(&buf[..n]).to_string();
-        socket.write_all(b"HTTP/1.1 200 OK\r\n\r\n").await.unwrap();
-        request
-    });
-
     let target_uri: http::Uri = "wss://host.example.com:8443".parse().unwrap();
-    let result = connect_via_proxy(&proxy_info, &target_uri).await;
-    assert!(result.is_ok());
 
-    let request_sent = mock_proxy.await.unwrap();
-    let expected_auth = format!(
-        "proxy-authorization: Basic {}",
-        BASE64.encode("user:secret")
+    let error = connect_via_proxy(&proxy_info, &target_uri)
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        "application networking is disabled in Warp Intranet"
     );
-    assert!(
-        request_sent.contains(&expected_auth),
-        "Request should contain auth header: {request_sent}"
+    assert_eq!(
+        listener.accept().unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
     );
 }
 
 #[tokio::test]
-async fn connect_via_proxy_fails_on_407() {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-
+async fn policy_rejects_proxy_requests_before_target_validation() {
     let proxy_info = ProxyInfo {
-        host: "127.0.0.1".to_string(),
-        port: addr.port(),
+        host: "proxy.example.invalid".to_string(),
+        port: 8080,
         basic_auth: None,
     };
+    let target_uri: http::Uri = "/no-target-host".parse().unwrap();
 
-    tokio::spawn(async move {
-        let (mut socket, _) = listener.accept().await.unwrap();
-        let mut buf = vec![0u8; 1024];
-        let _ = socket.read(&mut buf).await.unwrap();
-        socket
-            .write_all(b"HTTP/1.1 407 Proxy Authentication Required\r\n\r\n")
-            .await
-            .unwrap();
-    });
+    let error = connect_via_proxy(&proxy_info, &target_uri)
+        .await
+        .unwrap_err();
 
-    let target_uri: http::Uri = "wss://host.example.com:443".parse().unwrap();
-    let result = connect_via_proxy(&proxy_info, &target_uri).await;
-    assert!(result.is_err());
-    let err_msg = result.unwrap_err().to_string();
     assert!(
-        err_msg.contains("407"),
-        "Error should mention 407 status: {err_msg}"
+        error
+            .downcast_ref::<network_policy::NetworkDisabled>()
+            .is_some()
     );
 }

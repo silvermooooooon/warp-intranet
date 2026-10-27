@@ -9,12 +9,12 @@ struct TestIapTokenProvider;
 
 impl IapTokenProvider for TestIapTokenProvider {
     fn cached_token(&self) -> Option<String> {
-        Some("test-iap-token".into())
+        panic!("intranet request construction must not consult IAP credentials")
     }
 }
 
 #[test]
-fn external_client_omits_automatic_headers_and_preserves_signing_headers() {
+fn external_client_preserves_signing_headers_while_intranet_disables_iap() {
     with_active_span(|| {
         let mut client = Client::new();
         client.set_iap_token_provider(Arc::new(TestIapTokenProvider));
@@ -34,7 +34,7 @@ fn external_client_omits_automatic_headers_and_preserves_signing_headers() {
                 .contains_key(headers::TRACE_LINK_HEADER)
         );
         assert!(
-            api_request
+            !api_request
                 .headers()
                 .contains_key(iap::IAP_PROXY_AUTH_HEADER)
         );
